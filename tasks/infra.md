@@ -875,7 +875,9 @@ resource "aws_ecs_service" "service" {
   dynamic "service_registries" {
     for_each = var.enable_service_discovery ? [1] : []
     content {
-      registry_arn = var.service_discovery_arn
+      registry_arn   = var.service_discovery_arn
+      container_name = var.service_name      # Required for bridge network mode
+      container_port = var.container_port    # Required for bridge network mode
     }
   }
   
@@ -1086,7 +1088,7 @@ terraform {
   backend "s3" {
     bucket         = "petclinic-terraform-state"
     key            = "dev/terraform.tfstate"
-    region         = "us-east-1"
+    region         = "ap-southeast-1"
     encrypt        = true
     dynamodb_table = "petclinic-terraform-locks"
   }
@@ -1266,7 +1268,7 @@ variable "environment" {
 variable "aws_region" {
   description = "AWS region"
   type        = string
-  default     = "us-east-1"
+  default     = "ap-southeast-1"
 }
 
 variable "vpc_cidr" {
@@ -1278,7 +1280,7 @@ variable "vpc_cidr" {
 variable "availability_zones" {
   description = "Availability zones"
   type        = list(string)
-  default     = ["us-east-1a", "us-east-1b"]
+  default     = ["ap-southeast-1a", "ap-southeast-1b"]
 }
 
 variable "instance_type" {
@@ -1354,9 +1356,9 @@ output "rds_endpoint" {
 
 project            = "petclinic"
 environment        = "dev"
-aws_region         = "us-east-1"
+aws_region         = "ap-southeast-1"
 instance_type      = "t2.micro"
-availability_zones = ["us-east-1a", "us-east-1b"]
+availability_zones = ["ap-southeast-1a", "ap-southeast-1b"]
 
 # Database disabled by default (uses in-memory HSQLDB)
 enable_rds = false
@@ -1583,7 +1585,7 @@ on:
   workflow_dispatch:
 
 env:
-  AWS_REGION: us-east-1
+  AWS_REGION: ap-southeast-1
 
 jobs:
   build-and-push:
@@ -1712,7 +1714,7 @@ aws configure
 
 ```bash
 # Create S3 bucket for state
-aws s3 mb s3://petclinic-terraform-state --region us-east-1
+aws s3 mb s3://petclinic-terraform-state --region ap-southeast-1
 
 # Create DynamoDB table for locking
 aws dynamodb create-table \
@@ -1720,7 +1722,7 @@ aws dynamodb create-table \
   --attribute-definitions AttributeName=LockID,AttributeType=S \
   --key-schema AttributeName=LockID,KeyType=HASH \
   --billing-mode PAY_PER_REQUEST \
-  --region us-east-1
+  --region ap-southeast-1
 ```
 
 ### Deploy Infrastructure
@@ -1746,7 +1748,7 @@ terraform apply
 
 # Get ECR login
 AWS_ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
-AWS_REGION=us-east-1
+AWS_REGION=ap-southeast-1
 
 aws ecr get-login-password --region $AWS_REGION | \
   docker login --username AWS --password-stdin $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com
@@ -1817,7 +1819,7 @@ aws ec2 describe-vpc-endpoints --filters "Name=vpc-id,Values=<vpc-id>"
 
 # Test DNS resolution from EC2 instance
 # SSH to instance and run:
-nslookup ecr.api.us-east-1.amazonaws.com
+nslookup ecr.api.ap-southeast-1.amazonaws.com
 ```
 
 ### Container Can't Pull Images
@@ -1908,24 +1910,35 @@ git --version
 
 **Time: ~5 minutes**
 
-```bash
+```powershell
 # Set your AWS region
-export AWS_REGION=us-east-1
+$AWS_REGION = "ap-southeast-1"
+
+# Get your AWS Account ID
+$AWS_ACCOUNT_ID = aws sts get-caller-identity --query Account --output text
 
 # Create S3 bucket for Terraform state
-aws s3 mb s3://petclinic-tfstate-$(aws sts get-caller-identity --query Account --output text) --region $AWS_REGION
+aws s3 mb "s3://petclinic-tfstate-$AWS_ACCOUNT_ID" --region $AWS_REGION
 
 # Create DynamoDB table for state locking
-aws dynamodb create-table \
-  --table-name petclinic-terraform-locks \
-  --attribute-definitions AttributeName=LockID,AttributeType=S \
-  --key-schema AttributeName=LockID,KeyType=HASH \
-  --billing-mode PAY_PER_REQUEST \
+aws dynamodb create-table `
+  --table-name petclinic-terraform-locks `
+  --attribute-definitions AttributeName=LockID,AttributeType=S `
+  --key-schema AttributeName=LockID,KeyType=HASH `
+  --billing-mode PAY_PER_REQUEST `
   --region $AWS_REGION
 
-# Verify
-aws s3 ls | grep petclinic
-aws dynamodb describe-table --table-name petclinic-terraform-locks --query 'Table.TableStatus'
+# Verify S3 bucket created
+aws s3 ls | Select-String "petclinic"
+
+# Verify DynamoDB table created
+aws dynamodb describe-table --table-name petclinic-terraform-locks --query "Table.TableStatus"
+```
+
+**Expected output:**
+```
+make_bucket: petclinic-tfstate-123456789012
+"ACTIVE"
 ```
 
 ---
@@ -1934,18 +1947,18 @@ aws dynamodb describe-table --table-name petclinic-terraform-locks --query 'Tabl
 
 **Time: ~10 minutes**
 
-```bash
+```powershell
 cd C:\projects\microservices\petclinic
 
 # Create directory structure
-mkdir -p terraform/environments/dev
-mkdir -p terraform/modules/networking
-mkdir -p terraform/modules/ecr
-mkdir -p terraform/modules/ecs-cluster
-mkdir -p terraform/modules/ecs-service
-mkdir -p terraform/modules/alb
-mkdir -p terraform/modules/service-discovery
-mkdir -p terraform/modules/rds
+New-Item -ItemType Directory -Force -Path terraform\environments\dev
+New-Item -ItemType Directory -Force -Path terraform\modules\networking
+New-Item -ItemType Directory -Force -Path terraform\modules\ecr
+New-Item -ItemType Directory -Force -Path terraform\modules\ecs-cluster
+New-Item -ItemType Directory -Force -Path terraform\modules\ecs-service
+New-Item -ItemType Directory -Force -Path terraform\modules\alb
+New-Item -ItemType Directory -Force -Path terraform\modules\service-discovery
+New-Item -ItemType Directory -Force -Path terraform\modules\rds
 ```
 
 Create the files based on the Terraform code in sections 4 and 5 of this document. Here's the order:
@@ -1985,9 +1998,9 @@ terraform/
 
 **Time: ~15 minutes**
 
-```bash
+```powershell
 # Create modules/networking/variables.tf
-cat > terraform/modules/networking/variables.tf << 'EOF'
+@'
 variable "project" {
   type = string
 }
@@ -2008,10 +2021,10 @@ variable "vpc_cidr" {
 variable "availability_zones" {
   type = list(string)
 }
-EOF
+'@ | Out-File -FilePath terraform\modules\networking\variables.tf -Encoding UTF8
 
 # Create modules/networking/outputs.tf
-cat > terraform/modules/networking/outputs.tf << 'EOF'
+@'
 output "vpc_id" {
   value = aws_vpc.main.id
 }
@@ -2035,7 +2048,7 @@ output "ecs_security_group_id" {
 output "vpc_endpoints_security_group_id" {
   value = aws_security_group.vpc_endpoints.id
 }
-EOF
+'@ | Out-File -FilePath terraform\modules\networking\outputs.tf -Encoding UTF8
 ```
 
 Copy the main.tf content from **Section 4.1**, endpoints.tf from **Section 4.2**, and security-groups.tf from **Section 4.3**.
@@ -2046,9 +2059,9 @@ Copy the main.tf content from **Section 4.1**, endpoints.tf from **Section 4.2**
 
 **Time: ~5 minutes**
 
-```bash
+```powershell
 # Create modules/ecr/variables.tf
-cat > terraform/modules/ecr/variables.tf << 'EOF'
+@'
 variable "project" {
   type = string
 }
@@ -2056,14 +2069,14 @@ variable "project" {
 variable "services" {
   type = list(string)
 }
-EOF
+'@ | Out-File -FilePath terraform\modules\ecr\variables.tf -Encoding UTF8
 
 # Create modules/ecr/outputs.tf
-cat > terraform/modules/ecr/outputs.tf << 'EOF'
+@'
 output "repository_urls" {
   value = { for k, v in aws_ecr_repository.services : k => v.repository_url }
 }
-EOF
+'@ | Out-File -FilePath terraform\modules\ecr\outputs.tf -Encoding UTF8
 ```
 
 Copy main.tf content from **Section 4.4**.
@@ -2074,9 +2087,9 @@ Copy main.tf content from **Section 4.4**.
 
 **Time: ~10 minutes**
 
-```bash
+```powershell
 # Create modules/ecs-cluster/variables.tf
-cat > terraform/modules/ecs-cluster/variables.tf << 'EOF'
+@'
 variable "project" {
   type = string
 }
@@ -2106,10 +2119,10 @@ variable "enable_rds" {
   type    = bool
   default = false
 }
-EOF
+'@ | Out-File -FilePath terraform\modules\ecs-cluster\variables.tf -Encoding UTF8
 
 # Create modules/ecs-cluster/outputs.tf
-cat > terraform/modules/ecs-cluster/outputs.tf << 'EOF'
+@'
 output "cluster_id" {
   value = aws_ecs_cluster.main.id
 }
@@ -2125,7 +2138,7 @@ output "execution_role_arn" {
 output "task_role_arn" {
   value = aws_iam_role.ecs_task.arn
 }
-EOF
+'@ | Out-File -FilePath terraform\modules\ecs-cluster\outputs.tf -Encoding UTF8
 ```
 
 Copy main.tf from **Section 4.5** and iam.tf from **Section 4.6**.
@@ -2151,21 +2164,22 @@ Create the following modules using code from the referenced sections:
 
 **Time: ~10 minutes**
 
-```bash
-# Update backend bucket name in main.tf
-ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+```powershell
+# Get AWS Account ID
+$AWS_ACCOUNT_ID = aws sts get-caller-identity --query Account --output text
 
-cat > terraform/environments/dev/backend.tf << EOF
+# Create backend.tf with your account-specific bucket name
+@"
 terraform {
   backend "s3" {
-    bucket         = "petclinic-tfstate-${ACCOUNT_ID}"
+    bucket         = "petclinic-tfstate-$AWS_ACCOUNT_ID"
     key            = "dev/terraform.tfstate"
-    region         = "us-east-1"
+    region         = "ap-southeast-1"
     encrypt        = true
     dynamodb_table = "petclinic-terraform-locks"
   }
 }
-EOF
+"@ | Out-File -FilePath terraform\environments\dev\backend.tf -Encoding UTF8
 ```
 
 Create main.tf, variables.tf, outputs.tf, and terraform.tfvars from **Section 5**.
@@ -2225,7 +2239,7 @@ terraform output -json > outputs.json
 
 **Time: ~10 minutes**
 
-```bash
+```powershell
 # Fork the config repo (do this on GitHub first)
 # https://github.com/spring-petclinic/spring-petclinic-microservices-config
 
@@ -2237,8 +2251,8 @@ cd spring-petclinic-microservices-config
 
 Create `application-aws.yml`:
 
-```bash
-cat > application-aws.yml << 'EOF'
+```powershell
+@'
 # AWS Cloud Map configuration - disables Eureka
 spring:
   cloud:
@@ -2263,13 +2277,13 @@ management:
       probes:
         enabled: true
       show-details: always
-EOF
+'@ | Out-File -FilePath application-aws.yml -Encoding UTF8
 ```
 
 Create `api-gateway-aws.yml`:
 
-```bash
-cat > api-gateway-aws.yml << 'EOF'
+```powershell
+@'
 spring:
   cloud:
     gateway:
@@ -2292,12 +2306,12 @@ spring:
             - Path=/api/customer/**
           filters:
             - StripPrefix=2
-EOF
+'@ | Out-File -FilePath api-gateway-aws.yml -Encoding UTF8
 ```
 
 Commit and push:
 
-```bash
+```powershell
 git add .
 git commit -m "Add AWS Cloud Map configuration"
 git push origin main
@@ -2327,14 +2341,14 @@ spring:
 
 **Time: ~5-10 minutes**
 
-```bash
+```powershell
 cd C:\projects\microservices\petclinic
 
 # Build all services
-./mvnw clean package -DskipTests
+.\mvnw clean package -DskipTests
 
 # Verify JARs created
-ls -la */target/*.jar
+Get-ChildItem -Recurse -Filter "*.jar" -Path "*\target" | Where-Object { $_.Name -notlike "*sources*" -and $_.Name -notlike "*javadoc*" }
 ```
 
 ---
@@ -2343,39 +2357,43 @@ ls -la */target/*.jar
 
 **Time: ~10-15 minutes**
 
-```bash
+```powershell
 # Get AWS account info
-export AWS_ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
-export AWS_REGION=us-east-1
+$AWS_ACCOUNT_ID = aws sts get-caller-identity --query Account --output text
+$AWS_REGION = "ap-southeast-1"
 
 # Login to ECR
-aws ecr get-login-password --region $AWS_REGION | \
-  docker login --username AWS --password-stdin $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com
+$ECR_PASSWORD = aws ecr get-login-password --region $AWS_REGION
+$ECR_PASSWORD | docker login --username AWS --password-stdin "$AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com"
 
 # Build and push each service
-for service in config-server api-gateway customers-service visits-service vets-service; do
-  echo "Building $service..."
-  
-  docker build -f docker/Dockerfile \
-    --build-arg ARTIFACT_NAME=spring-petclinic-${service}-3.2.4 \
-    --build-arg EXPOSED_PORT=8080 \
-    -t $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/petclinic/${service}:latest \
-    spring-petclinic-${service}/target
-  
-  echo "Pushing $service..."
-  docker push $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/petclinic/${service}:latest
-done
+$services = @("config-server", "api-gateway", "customers-service", "visits-service", "vets-service")
 
-echo "All images pushed!"
+foreach ($service in $services) {
+    Write-Host "Building $service..." -ForegroundColor Green
+    
+    docker build -f docker/Dockerfile `
+        --build-arg ARTIFACT_NAME="spring-petclinic-$service-3.2.4" `
+        --build-arg EXPOSED_PORT=8080 `
+        -t "$AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/petclinic/${service}:latest" `
+        "spring-petclinic-$service/target"
+    
+    Write-Host "Pushing $service..." -ForegroundColor Green
+    docker push "$AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/petclinic/${service}:latest"
+}
+
+Write-Host "All images pushed!" -ForegroundColor Cyan
 ```
 
 Verify images in ECR:
 
-```bash
-for service in config-server api-gateway customers-service visits-service vets-service; do
-  echo "$service:"
-  aws ecr describe-images --repository-name petclinic/${service} --query 'imageDetails[0].imageTags'
-done
+```powershell
+$services = @("config-server", "api-gateway", "customers-service", "visits-service", "vets-service")
+
+foreach ($service in $services) {
+    Write-Host "$service`:" -ForegroundColor Yellow
+    aws ecr describe-images --repository-name "petclinic/$service" --query "imageDetails[0].imageTags"
+}
 ```
 
 ---
@@ -2386,33 +2404,35 @@ done
 
 The services were created by Terraform but need to pull the images:
 
-```bash
+```powershell
 # Force new deployment to pull latest images
 # Deploy config-server first (others depend on it)
-aws ecs update-service \
-  --cluster petclinic-dev \
-  --service config-server \
-  --force-new-deployment
+aws ecs update-service `
+    --cluster petclinic-dev `
+    --service config-server `
+    --force-new-deployment
 
 # Wait for config-server to be stable
-echo "Waiting for config-server to stabilize..."
+Write-Host "Waiting for config-server to stabilize..." -ForegroundColor Yellow
 aws ecs wait services-stable --cluster petclinic-dev --services config-server
 
 # Deploy remaining services
-for service in api-gateway customers-service visits-service vets-service; do
-  echo "Deploying $service..."
-  aws ecs update-service \
-    --cluster petclinic-dev \
-    --service $service \
-    --force-new-deployment
-done
+$services = @("api-gateway", "customers-service", "visits-service", "vets-service")
 
-echo "Waiting for all services to stabilize..."
-aws ecs wait services-stable \
-  --cluster petclinic-dev \
-  --services api-gateway customers-service visits-service vets-service
+foreach ($service in $services) {
+    Write-Host "Deploying $service..." -ForegroundColor Green
+    aws ecs update-service `
+        --cluster petclinic-dev `
+        --service $service `
+        --force-new-deployment
+}
 
-echo "All services deployed!"
+Write-Host "Waiting for all services to stabilize..." -ForegroundColor Yellow
+aws ecs wait services-stable `
+    --cluster petclinic-dev `
+    --services api-gateway customers-service visits-service vets-service
+
+Write-Host "All services deployed!" -ForegroundColor Cyan
 ```
 
 ---
@@ -2421,24 +2441,27 @@ echo "All services deployed!"
 
 **Time: ~5 minutes**
 
-```bash
+```powershell
 # Check ECS services status
-aws ecs describe-services \
-  --cluster petclinic-dev \
-  --services config-server api-gateway customers-service visits-service vets-service \
-  --query 'services[*].[serviceName,runningCount,desiredCount]' \
-  --output table
+aws ecs describe-services `
+    --cluster petclinic-dev `
+    --services config-server api-gateway customers-service visits-service vets-service `
+    --query "services[*].[serviceName,runningCount,desiredCount]" `
+    --output table
 
 # Get ALB DNS name
-ALB_DNS=$(cd terraform/environments/dev && terraform output -raw alb_dns_name)
-echo "Application URL: http://$ALB_DNS"
+cd terraform\environments\dev
+$ALB_DNS = terraform output -raw alb_dns_name
+Write-Host "Application URL: http://$ALB_DNS" -ForegroundColor Cyan
 
 # Test health endpoint
-curl http://$ALB_DNS/actuator/health
+Write-Host "Testing health endpoint..." -ForegroundColor Yellow
+Invoke-RestMethod -Uri "http://$ALB_DNS/actuator/health"
 
-# Test the application
-curl http://$ALB_DNS/api/vet/vets
-curl http://$ALB_DNS/api/customer/owners
+# Test the application endpoints
+Write-Host "Testing API endpoints..." -ForegroundColor Yellow
+Invoke-RestMethod -Uri "http://$ALB_DNS/api/vet/vets"
+Invoke-RestMethod -Uri "http://$ALB_DNS/api/customer/owners"
 ```
 
 Open in browser: `http://<ALB_DNS_NAME>`
@@ -2447,15 +2470,23 @@ Open in browser: `http://<ALB_DNS_NAME>`
 
 ### Step 16: View Logs (Troubleshooting)
 
-```bash
-# View logs for a service
+```powershell
+# View logs for a service (follow mode)
 aws logs tail /ecs/petclinic/api-gateway --follow
 
-# View recent events
-aws ecs describe-services \
-  --cluster petclinic-dev \
-  --services api-gateway \
-  --query 'services[0].events[0:5]'
+# View recent events for a service
+aws ecs describe-services `
+    --cluster petclinic-dev `
+    --services api-gateway `
+    --query "services[0].events[0:5]"
+
+# View logs for a specific time range (last 30 minutes)
+$startTime = [int][double]::Parse((Get-Date (Get-Date).AddMinutes(-30) -UFormat %s)) * 1000
+aws logs filter-log-events `
+    --log-group-name /ecs/petclinic/api-gateway `
+    --start-time $startTime `
+    --query "events[*].message" `
+    --output text
 ```
 
 ---
@@ -2464,8 +2495,8 @@ aws ecs describe-services \
 
 **Time: ~10 minutes**
 
-```bash
-cd terraform/environments/dev
+```powershell
+cd C:\projects\microservices\petclinic\terraform\environments\dev
 
 # Destroy all resources
 terraform destroy
@@ -2479,9 +2510,12 @@ aws ec2 describe-vpcs --filters "Name=tag:Project,Values=petclinic"
 
 **Optional:** Remove state backend (if no longer needed):
 
-```bash
-# Delete S3 bucket
-aws s3 rb s3://petclinic-tfstate-$AWS_ACCOUNT_ID --force
+```powershell
+$AWS_ACCOUNT_ID = aws sts get-caller-identity --query Account --output text
+
+# Empty and delete S3 bucket
+aws s3 rm "s3://petclinic-tfstate-$AWS_ACCOUNT_ID" --recursive
+aws s3 rb "s3://petclinic-tfstate-$AWS_ACCOUNT_ID"
 
 # Delete DynamoDB table
 aws dynamodb delete-table --table-name petclinic-terraform-locks
@@ -2506,24 +2540,25 @@ aws dynamodb delete-table --table-name petclinic-terraform-locks
 
 ---
 
-### Quick Reference Commands
+### Quick Reference Commands (PowerShell)
 
-```bash
-# Deploy
-cd terraform/environments/dev && terraform apply
+```powershell
+# Deploy infrastructure
+cd C:\projects\microservices\petclinic\terraform\environments\dev
+terraform apply
 
-# Check services
-aws ecs describe-services --cluster petclinic-dev \
-  --services config-server api-gateway customers-service visits-service vets-service \
-  --query 'services[*].[serviceName,runningCount]' --output table
+# Check services status
+aws ecs describe-services --cluster petclinic-dev `
+    --services config-server api-gateway customers-service visits-service vets-service `
+    --query "services[*].[serviceName,runningCount]" --output table
 
 # View logs
 aws logs tail /ecs/petclinic/api-gateway --follow
 
-# Force redeploy
+# Force redeploy a service
 aws ecs update-service --cluster petclinic-dev --service api-gateway --force-new-deployment
 
-# Get app URL
+# Get application URL
 terraform output application_url
 
 # Tear down
