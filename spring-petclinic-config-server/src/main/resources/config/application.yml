@@ -1,0 +1,41 @@
+# Shared configuration for all Spring Cloud Config clients
+# This config is fetched from config-server and applies to all microservices
+
+# Allow microservices to override remote properties with their own System properties or config file
+spring:
+  cloud:
+    config:
+      allow-override: true
+      override-none: true
+  # HSQLDB data initialization (default when MySQL is not enabled)
+  sql:
+    init:
+      schema-locations: classpath*:db/hsqldb/schema.sql
+      data-locations: classpath*:db/hsqldb/data.sql
+      mode: always
+  # Ensure SQL init runs after JPA/Hibernate
+  jpa:
+    defer-datasource-initialization: true
+    hibernate:
+      ddl-auto: none
+    open-in-view: false
+
+# Enable all Actuators
+management:
+  endpoints:
+    web:
+      exposure:
+        include: '*'
+
+# Logging
+logging:
+  level:
+    org.springframework: INFO
+
+# Eureka configuration (will be disabled when using AWS profile)
+eureka:
+  instance:
+    prefer-ip-address: true
+  client:
+    serviceUrl:
+      defaultZone: http://discovery-server:8761/eureka/
