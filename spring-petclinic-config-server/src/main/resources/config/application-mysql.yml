@@ -1,0 +1,12 @@
+# MySQL configuration - overrides HSQLDB defaults when mysql profile is active
+spring:
+  sql:
+    init:
+      schema-locations: classpath*:db/mysql/schema.sql
+      data-locations: classpath*:db/mysql/data.sql
+      mode: always
+  datasource:
+    # These will be overridden by environment variables in ECS
+    url: jdbc:mysql://localhost:3306/petclinic
+    username: root
+    password: petclinic

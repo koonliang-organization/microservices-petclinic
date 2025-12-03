@@ -1,8 +1,28 @@
+server.port: 8082
 spring:
   application:
     name: visits-service
   config:
     import: optional:configserver:${CONFIG_SERVER_URL:http://localhost:8888/}
+  cloud:
+    config:
+      # Retry configuration - wait for config-server to be available
+      fail-fast: false
+      retry:
+        initial-interval: 3000
+        max-attempts: 20
+        max-interval: 10000
+        multiplier: 1.5
+  # HSQLDB data initialization - local config so it works without config-server
+  sql:
+    init:
+      schema-locations: classpath*:db/hsqldb/schema.sql
+      data-locations: classpath*:db/hsqldb/data.sql
+      mode: always
+  jpa:
+    defer-datasource-initialization: true
+    hibernate:
+      ddl-auto: none
 
 
 ---
@@ -10,4 +30,4 @@ spring:
   config:
     activate:
       on-profile: docker
-    import: configserver:http://config-server:8888
+    import: optional:configserver:${CONFIG_SERVER_URL:http://config-server:8888}

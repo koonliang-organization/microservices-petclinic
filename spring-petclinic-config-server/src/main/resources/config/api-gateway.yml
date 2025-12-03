@@ -1,0 +1,2 @@
+# Base configuration for api-gateway
+# Profile-specific routes are in api-gateway-{profile}.yml

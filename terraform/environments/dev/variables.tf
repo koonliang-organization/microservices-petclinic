@@ -64,5 +64,27 @@ variable "db_password" {
 variable "enable_service_discovery" {
   description = "Enable Cloud Map service discovery (for multi-EC2 environments like SIT/PROD)"
   type        = bool
-  default     = false  # DEV uses localhost
+  default     = true  # DEV now uses multiple EC2 instances
+}
+
+#############################
+# EC2 Auto Scaling
+#############################
+
+variable "ec2_min_size" {
+  description = "Minimum number of EC2 instances"
+  type        = number
+  default     = 1
+}
+
+variable "ec2_max_size" {
+  description = "Maximum number of EC2 instances"
+  type        = number
+  default     = 1
+}
+
+variable "ec2_desired_capacity" {
+  description = "Desired number of EC2 instances"
+  type        = number
+  default     = 1
 }

@@ -24,36 +24,36 @@ provider "aws" {
 locals {
   services = {
     "config-server" = {
-      cpu                = 128
-      memory_reservation = 200
+      cpu                = 256
+      memory_reservation = 384
       port               = 8888
       desired_count      = 1
       enable_alb         = false
     }
     "api-gateway" = {
-      cpu                = 128
-      memory_reservation = 200
+      cpu                = 256
+      memory_reservation = 384
       port               = 8080
       desired_count      = 1
       enable_alb         = true
     }
     "customers-service" = {
-      cpu                = 128
-      memory_reservation = 150
+      cpu                = 256
+      memory_reservation = 300
       port               = 8081
       desired_count      = 1
       enable_alb         = false
     }
     "visits-service" = {
-      cpu                = 128
-      memory_reservation = 150
+      cpu                = 256
+      memory_reservation = 300
       port               = 8082
       desired_count      = 1
       enable_alb         = false
     }
     "vets-service" = {
-      cpu                = 128
-      memory_reservation = 150
+      cpu                = 256
+      memory_reservation = 300
       port               = 8083
       desired_count      = 1
       enable_alb         = false
@@ -72,6 +72,10 @@ module "networking" {
   aws_region         = var.aws_region
   vpc_cidr           = var.vpc_cidr
   availability_zones = var.availability_zones
+
+  # Cost optimization: No VPC endpoints, no NAT - use public subnets for ECS
+  enable_vpc_endpoints = false
+  enable_nat_gateway   = false
 }
 
 #############################
@@ -85,10 +89,9 @@ module "ecr" {
 }
 
 #############################
-# Service Discovery (only if enabled)
+# Service Discovery (enabled for multi-EC2)
 #############################
 module "service_discovery" {
-  count  = var.enable_service_discovery ? 1 : 0
   source = "../../modules/service-discovery"
 
   project       = var.project
@@ -108,8 +111,15 @@ module "ecs_cluster" {
   aws_region            = var.aws_region
   instance_type         = var.instance_type
   private_subnet_ids    = module.networking.private_subnet_ids
+  public_subnet_ids     = module.networking.public_subnet_ids
+  use_public_subnets    = true  # DEV: Use public subnets to avoid VPC endpoint costs
   ecs_security_group_id = module.networking.ecs_security_group_id
   enable_rds            = var.enable_rds
+
+  # EC2 Auto Scaling
+  min_size         = var.ec2_min_size
+  max_size         = var.ec2_max_size
+  desired_capacity = var.ec2_desired_capacity
 }
 
 #############################
@@ -164,13 +174,17 @@ module "ecs_services" {
   container_port     = each.value.port
   desired_count      = each.value.desired_count
 
+  # Network configuration for awsvpc mode (use public subnets for DEV)
+  subnet_ids        = module.networking.public_subnet_ids
+  security_group_id = module.networking.ecs_security_group_id
+
   # ALB (only for api-gateway)
   enable_alb       = each.value.enable_alb
   target_group_arn = module.alb.target_group_arn
 
-  # Service Discovery (disabled for DEV - uses localhost)
+  # Service Discovery
   enable_service_discovery = var.enable_service_discovery
-  service_discovery_arn    = var.enable_service_discovery ? module.service_discovery[0].service_arns[each.key] : ""
+  service_discovery_arn    = module.service_discovery.service_arns[each.key]
   discovery_namespace      = "petclinic.local"
 
   # RDS (optional)

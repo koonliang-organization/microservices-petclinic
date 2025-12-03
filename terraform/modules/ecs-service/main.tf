@@ -1,6 +1,6 @@
 resource "aws_ecs_task_definition" "service" {
   family                   = "${var.project}-${var.service_name}"
-  network_mode             = "bridge"
+  network_mode             = "awsvpc"
   requires_compatibilities = ["EC2"]
   execution_role_arn       = var.execution_role_arn
   task_role_arn            = var.task_role_arn
@@ -11,19 +11,23 @@ resource "aws_ecs_task_definition" "service" {
 
     portMappings = [{
       containerPort = var.container_port
-      hostPort      = var.container_port  # Static host port (required for A records)
       protocol      = "tcp"
     }]
 
     environment = concat([
       {
         name  = "SPRING_PROFILES_ACTIVE"
-        value = var.enable_rds ? "docker,aws,mysql" : "docker,aws"
+        # config-server needs 'native' profile to use classpath config instead of Git
+        value = var.service_name == "config-server" ? (
+          var.enable_rds ? "native,aws,mysql" : "native,aws"
+        ) : (
+          var.enable_rds ? "aws,mysql" : "aws"
+        )
       },
       {
-        # Use Cloud Map DNS for multi-EC2, localhost for single-EC2
+        # Config server URL - use service discovery DNS if enabled, otherwise Docker bridge
         name  = "CONFIG_SERVER_URL"
-        value = var.enable_service_discovery ? "http://config-server.${var.discovery_namespace}:8888" : "http://localhost:8888"
+        value = var.enable_service_discovery ? "http://config-server.${var.discovery_namespace}:8888" : "http://172.17.0.1:8888"
       },
       {
         name  = "EUREKA_CLIENT_ENABLED"
@@ -86,14 +90,10 @@ resource "aws_ecs_service" "service" {
   desired_count   = var.desired_count
   launch_type     = "EC2"
 
-  # Service Discovery (only for SIT/PROD with multiple EC2s)
-  dynamic "service_registries" {
-    for_each = var.enable_service_discovery ? [1] : []
-    content {
-      registry_arn   = var.service_discovery_arn
-      container_name = var.service_name
-      container_port = var.container_port
-    }
+  # Network configuration required for awsvpc mode
+  network_configuration {
+    subnets         = var.subnet_ids
+    security_groups = [var.security_group_id]
   }
 
   # ALB (only for api-gateway)
@@ -103,6 +103,14 @@ resource "aws_ecs_service" "service" {
       target_group_arn = var.target_group_arn
       container_name   = var.service_name
       container_port   = var.container_port
+    }
+  }
+
+  # Service Discovery (Cloud Map) - A records for awsvpc mode
+  dynamic "service_registries" {
+    for_each = var.enable_service_discovery ? [1] : []
+    content {
+      registry_arn = var.service_discovery_arn
     }
   }
 
