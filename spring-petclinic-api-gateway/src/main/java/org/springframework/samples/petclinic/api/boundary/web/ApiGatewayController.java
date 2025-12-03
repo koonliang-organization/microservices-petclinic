@@ -16,6 +16,8 @@
 package org.springframework.samples.petclinic.api.boundary.web;
 
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+
 import org.springframework.cloud.client.circuitbreaker.ReactiveCircuitBreaker;
 import org.springframework.cloud.client.circuitbreaker.ReactiveCircuitBreakerFactory;
 import org.springframework.samples.petclinic.api.application.CustomersServiceClient;
@@ -34,6 +36,7 @@ import java.util.stream.Collectors;
 /**
  * @author Maciej Szarlinski
  */
+@Slf4j
 @RestController
 @RequiredArgsConstructor
 @RequestMapping("/api/gateway")
@@ -47,6 +50,7 @@ public class ApiGatewayController {
 
     @GetMapping(value = "owners/{ownerId}")
     public Mono<OwnerDetails> getOwnerDetails(final @PathVariable int ownerId) {
+        log.info("Getting owner details by ownerId: {}", ownerId);
         return customersServiceClient.getOwner(ownerId)
             .flatMap(owner ->
                 visitsServiceClient.getVisitsForPets(owner.getPetIds())

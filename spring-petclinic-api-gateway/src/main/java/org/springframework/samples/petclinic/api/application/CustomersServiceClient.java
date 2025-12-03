@@ -16,6 +16,9 @@
 package org.springframework.samples.petclinic.api.application;
 
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.samples.petclinic.api.dto.OwnerDetails;
 import org.springframework.stereotype.Component;
 import org.springframework.web.reactive.function.client.WebClient;
@@ -24,15 +27,20 @@ import reactor.core.publisher.Mono;
 /**
  * @author Maciej Szarlinski
  */
+@Slf4j
 @Component
 @RequiredArgsConstructor
 public class CustomersServiceClient {
 
+    @Value("${customers-service.url:http://customers-service}")
+    private String hostname;
+
     private final WebClient.Builder webClientBuilder;
 
     public Mono<OwnerDetails> getOwner(final int ownerId) {
+        log.info("Getting Owner, Hostname: {}", hostname);
         return webClientBuilder.build().get()
-            .uri("http://customers-service/owners/{ownerId}", ownerId)
+            .uri(hostname + "/owners/{ownerId}", ownerId)
             .retrieve()
             .bodyToMono(OwnerDetails.class);
     }

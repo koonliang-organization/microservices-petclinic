@@ -19,9 +19,9 @@ resource "aws_ecs_task_definition" "service" {
         name  = "SPRING_PROFILES_ACTIVE"
         # config-server needs 'native' profile to use classpath config instead of Git
         value = var.service_name == "config-server" ? (
-          var.enable_rds ? "native,docker,aws,mysql" : "native,docker,aws"
+          var.enable_rds ? "native,aws,mysql" : "native,aws"
         ) : (
-          var.enable_rds ? "docker,aws,mysql" : "docker,aws"
+          var.enable_rds ? "aws,mysql" : "aws"
         )
       },
       {

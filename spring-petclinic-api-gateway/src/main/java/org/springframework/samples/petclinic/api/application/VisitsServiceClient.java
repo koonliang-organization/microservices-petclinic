@@ -16,6 +16,9 @@
 package org.springframework.samples.petclinic.api.application;
 
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.samples.petclinic.api.dto.Visits;
 import org.springframework.stereotype.Component;
 import org.springframework.web.reactive.function.client.WebClient;
@@ -28,28 +31,26 @@ import static java.util.stream.Collectors.joining;
 /**
  * @author Maciej Szarlinski
  */
+@Slf4j
 @Component
 @RequiredArgsConstructor
 public class VisitsServiceClient {
 
-    // Could be changed for testing purpose
-    private String hostname = "http://visits-service/";
+    @Value("${visits-service.url:http://visits-service}")
+    private String hostname;
 
     private final WebClient.Builder webClientBuilder;
 
     public Mono<Visits> getVisitsForPets(final List<Integer> petIds) {
+        log.info("Getting Visits for Pets, Hostname: {}", hostname);
         return webClientBuilder.build()
             .get()
-            .uri(hostname + "pets/visits?petId={petId}", joinIds(petIds))
+            .uri(hostname + "/pets/visits?petId={petId}", joinIds(petIds))
             .retrieve()
             .bodyToMono(Visits.class);
     }
 
     private String joinIds(List<Integer> petIds) {
         return petIds.stream().map(Object::toString).collect(joining(","));
-    }
-
-    void setHostname(String hostname) {
-        this.hostname = hostname;
     }
 }
